@@ -30,8 +30,15 @@ public class InstallerApplication {
                     : "/var/lib/jmcl-servers"
     );
 
+    private static boolean autoMode = false;
+
     public static void main(String[] args) throws Exception {
+        autoMode = args.length > 0 && (args[0].equals("--auto") || args[0].equals("-y") || args[0].equals("--yes"));
+
         System.out.println(BANNER);
+        if (autoMode) {
+            System.out.println("[AUTO mode] All prompts default to YES.");
+        }
 
         OsDetector os = new OsDetector();
         System.out.println("Detected OS: " + os.getName() + " (" + os.getArch() + ")");
@@ -40,7 +47,7 @@ public class InstallerApplication {
         System.out.println("Data Directory: " + DATA_DIR);
         System.out.println();
 
-        Scanner scanner = new Scanner(System.in);
+        Scanner scanner = autoMode ? null : new Scanner(System.in);
 
         // 1. Check prerequisites
         System.out.println("═══ Step 1/5: Checking Prerequisites ═══");
@@ -50,9 +57,7 @@ public class InstallerApplication {
         System.out.println("\n═══ Step 2/5: Installing Docker ═══");
         DockerInstaller dockerInstaller = new DockerInstaller(os);
         if (!dockerInstaller.isDockerInstalled()) {
-            System.out.print("Docker is not installed. Install now? [Y/n]: ");
-            String response = scanner.nextLine().trim().toLowerCase();
-            if (response.isEmpty() || response.equals("y")) {
+            if (promptYesNo(scanner, "Docker is not installed. Install now?")) {
                 dockerInstaller.install();
             } else {
                 System.out.println("Docker is required. Please install it manually and re-run.");
@@ -70,9 +75,7 @@ public class InstallerApplication {
         // 4. Configure system service
         System.out.println("\n═══ Step 4/5: Configuring Auto-start Service ═══");
         ServiceConfigurator serviceConfig = new ServiceConfigurator(os);
-        System.out.print("Enable auto-start on system boot? [Y/n]: ");
-        String autoStart = scanner.nextLine().trim().toLowerCase();
-        if (autoStart.isEmpty() || autoStart.equals("y")) {
+        if (promptYesNo(scanner, "Enable auto-start on system boot?")) {
             serviceConfig.installService();
             System.out.println("Service installed. JMCL will start automatically on boot.");
         } else {
@@ -81,9 +84,7 @@ public class InstallerApplication {
 
         // 5. Start services
         System.out.println("\n═══ Step 5/5: Starting JMCL Services ═══");
-        System.out.print("Start JMCL Server Manager now? [Y/n]: ");
-        String startNow = scanner.nextLine().trim().toLowerCase();
-        if (startNow.isEmpty() || startNow.equals("y")) {
+        if (promptYesNo(scanner, "Start JMCL Server Manager now?")) {
             startServices();
             System.out.println("\n✅ JMCL Server Manager is now running!");
             String frontendUrl = "http://localhost:252540";
@@ -104,7 +105,17 @@ public class InstallerApplication {
         System.out.println("  Logs:    docker-compose -f " + INSTALL_DIR + "/docker-compose.yml logs -f");
         System.out.println("═══════════════════════════════════════");
 
-        scanner.close();
+        if (scanner != null) scanner.close();
+    }
+
+    private static boolean promptYesNo(Scanner scanner, String message) {
+        if (autoMode) {
+            System.out.println(message + " [Y/n]: y  (auto)");
+            return true;
+        }
+        System.out.print(message + " [Y/n]: ");
+        String response = scanner.nextLine().trim().toLowerCase();
+        return response.isEmpty() || response.equals("y");
     }
 
     private static void checkPrerequisites(OsDetector os) throws Exception {
