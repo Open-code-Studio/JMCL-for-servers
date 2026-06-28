@@ -1,13 +1,9 @@
-name: Build and Push Multi-Registry
+name: Build and Push to GHCR
 
 on:
   push:
     branches: [main]
   workflow_dispatch:
-
-env:
-  IMAGE_NAME_BACKEND: jmcl-backend
-  IMAGE_NAME_FRONTEND: jmcl-frontend
 
 jobs:
   backend:
@@ -26,18 +22,10 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - uses: docker/login-action@v3
-        if: vars.DOCKERHUB_USERNAME != ''
-        with:
-          registry: docker.io
-          username: ${{ vars.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
       - uses: docker/metadata-action@v5
         id: meta
         with:
-          images: |
-            ghcr.io/open-code-studio/${{ env.IMAGE_NAME_BACKEND }}
+          images: ghcr.io/open-code-studio/jmcl-backend
           tags: |
             type=raw,value=latest
             type=sha
@@ -48,14 +36,6 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ steps.meta.outputs.tags }}
-
-      - name: Push to Docker Hub (mirror)
-        if: vars.DOCKERHUB_USERNAME != ''
-        run: |
-          docker pull ghcr.io/open-code-studio/${{ env.IMAGE_NAME_BACKEND }}:latest
-          docker tag ghcr.io/open-code-studio/${{ env.IMAGE_NAME_BACKEND }}:latest \
-            docker.io/open-code-studio/${{ env.IMAGE_NAME_BACKEND }}:latest
-          docker push docker.io/open-code-studio/${{ env.IMAGE_NAME_BACKEND }}:latest
 
   frontend:
     runs-on: ubuntu-latest
@@ -73,18 +53,10 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - uses: docker/login-action@v3
-        if: vars.DOCKERHUB_USERNAME != ''
-        with:
-          registry: docker.io
-          username: ${{ vars.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
       - uses: docker/metadata-action@v5
         id: meta
         with:
-          images: |
-            ghcr.io/open-code-studio/${{ env.IMAGE_NAME_FRONTEND }}
+          images: ghcr.io/open-code-studio/jmcl-frontend
           tags: |
             type=raw,value=latest
             type=sha
@@ -95,11 +67,3 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ steps.meta.outputs.tags }}
-
-      - name: Push to Docker Hub (mirror)
-        if: vars.DOCKERHUB_USERNAME != ''
-        run: |
-          docker pull ghcr.io/open-code-studio/${{ env.IMAGE_NAME_FRONTEND }}:latest
-          docker tag ghcr.io/open-code-studio/${{ env.IMAGE_NAME_FRONTEND }}:latest \
-            docker.io/open-code-studio/${{ env.IMAGE_NAME_FRONTEND }}:latest
-          docker push docker.io/open-code-studio/${{ env.IMAGE_NAME_FRONTEND }}:latest
