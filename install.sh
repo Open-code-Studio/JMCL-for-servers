@@ -1,70 +1,157 @@
 #!/usr/bin/env bash
 set -euo pipefail
+exec 2>/tmp/jmcl-install.log
 
 # ═══════════════════════════════════════════
 #  JMCL Server Manager - Remote Installer
-#  Usage: sudo bash install.sh
+#  Usage: curl ... | sudo bash
 # ═══════════════════════════════════════════
 
-RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; CYAN='\033[0;36m'; NC='\033[0m'
+RC='\033[0m'; RD='\033[0;31m'; GN='\033[0;32m'; YW='\033[1;33m'; CY='\033[0;36m'; BL='\033[0;34m'; MG='\033[0;35m'
 
-log()  { echo -e "${GREEN}[✓]${NC} $1"; }
-warn() { echo -e "${YELLOW}[!]${NC} $1"; }
-err()  { echo -e "${RED}[✗]${NC} $1"; exit 1; }
-step() { echo -e "\n${CYAN}═══ $1 ═══${NC}"; }
+# UI Helpers
+clear_screen() { printf "\033[2J\033[H"; }
+cursor_hide()  { printf "\033[?25l"; }
+cursor_show()  { printf "\033[?25h"; }
+move_to()      { printf "\033[%d;%dH" "${1:-1}" "${2:-1}"; }
+draw_line()    { printf "%${1:-60}s\n" | tr ' ' "${2:-━}"; }
 
+log()   { echo -e "${GN} ✓${RC} $1"; }
+warn()  { echo -e "${YW} ⚠${RC} $1"; }
+err()   { echo -e "${RD} ✗${RC} $1"; exit 1; }
+info()  { echo -e "${CY} ▶${RC} $1"; }
+ok()    { echo -e "${GN} ✓${RC} $1"; }
+
+# Spinner for background tasks
+spinner() {
+    local pid=$1 msg="${2:-Working...}"
+    local spin=('⠋' '⠙' '⠹' '⠸' '⠼' '⠴' '⠦' '⠧' '⠇' '⠏')
+    local i=0
+    printf "${CY} %s${RC} %s" "${spin[0]}" "$msg"
+    while kill -0 "$pid" 2>/dev/null; do
+        printf "\r${CY} %s${RC} %s" "${spin[$i]}" "$msg"
+        i=$(( (i + 1) % ${#spin[@]} ))
+        sleep 0.1
+    done
+    wait "$pid" 2>/dev/null
+    local exit_code=$?
+    printf "\r\033[K"
+    return $exit_code
+}
+
+# Progress bar
+progress_bar() {
+    local current=$1 total=$2 label="${3:-}"
+    local pct=$(( current * 100 / total ))
+    local bar_width=30
+    local filled=$(( pct * bar_width / 100 ))
+    local empty=$(( bar_width - filled ))
+    printf "\r  ${BL}[${RC}"
+    printf "%${filled}s" | tr ' ' '█'
+    printf "%${empty}s" | tr ' ' '░'
+    printf "${BL}]${RC} %3d%%  %s" "$pct" "$label"
+}
+
+# Install variables
 INSTALL_DIR="/opt/jmcl-servers"
 DATA_DIR="/var/lib/jmcl-servers"
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-
-# ─── Step 1: Check OS ─────────────────────
-step "Step 1/5: Checking System"
+TOTAL_STEPS=5
+CURRENT_STEP=0
 OS="$(uname -s)"
 ARCH="$(uname -m)"
-log "OS: $OS, Arch: $ARCH"
+SERVER_IP=$(hostname -I 2>/dev/null | awk '{print $1}' || echo "YOUR_IP")
+
+trap cursor_show EXIT
+
+# ═══════════════════════════════════════════
+clear_screen
+echo ""
+echo -e "${MG}  ╔═══════════════════════════════════╗${RC}"
+echo -e "${MG}  ║   JMCL Server Manager Installer   ║${RC}"
+echo -e "${MG}  ║        ${CY}v1.0.0${MG}                     ║${RC}"
+echo -e "${MG}  ╚═══════════════════════════════════╝${RC}"
+echo ""
+
+# Progress header
+printf "  %-20s %s\n" "System:"   "${OS} / ${ARCH}"
+printf "  %-20s %s\n" "Install:"  "${INSTALL_DIR}"
+printf "  %-20s %s\n\n" "Data:"   "${DATA_DIR}"
+
+draw_line 50 '─'
+
+# ─── Step 1 ─────────────────────────────────
+((CURRENT_STEP++))
+echo ""
+progress_bar "$CURRENT_STEP" "$TOTAL_STEPS" "Checking prerequisites..."
+echo ""
+echo ""
 
 if [ "$OS" != "Linux" ]; then
-    err "This installer only supports Linux. macOS use: docker compose up -d"
+    err "Only Linux is supported. For macOS, use: docker compose up -d"
 fi
 
-# Check disk
+log "OS: $OS ($ARCH)"
+
 DISK_FREE=$(df -BG /opt 2>/dev/null | tail -1 | awk '{print $4}' | tr -d 'G' || echo "0")
-[ "$DISK_FREE" -lt 5 ] 2>/dev/null && warn "Low disk space: ${DISK_FREE}GB free (<5GB recommended)"
-
-# ─── Step 2: Install Docker ───────────────
-step "Step 2/5: Installing Docker"
-if command -v docker &>/dev/null && docker --version &>/dev/null; then
-    log "Docker already installed: $(docker --version)"
+if [ "$DISK_FREE" -lt 5 ] 2>/dev/null; then
+    warn "Low disk: ${DISK_FREE}GB free (need 5GB+)"
 else
-    warn "Docker not found. Installing..."
-    curl -fsSL https://get.docker.com | sh || err "Docker install failed"
-    systemctl start docker
-    systemctl enable docker
-    log "Docker installed successfully"
+    log "Disk: ${DISK_FREE}GB free"
 fi
 
-# Docker Compose plugin
+MEM_TOTAL=$(free -m 2>/dev/null | awk '/Mem:/{print $2}' || echo "N/A")
+log "Memory: ${MEM_TOTAL}MB total"
+
+draw_line 50 '─'
+
+# ─── Step 2 ─────────────────────────────────
+((CURRENT_STEP++))
+echo ""
+progress_bar "$CURRENT_STEP" "$TOTAL_STEPS" "Installing Docker..."
+echo ""
+echo ""
+
+if command -v docker &>/dev/null && docker --version &>/dev/null; then
+    log "Docker: $(docker --version 2>&1 | head -1)"
+else
+    info "Installing Docker (this may take a minute)..."
+    curl -fsSL https://get.docker.com -o /tmp/get-docker.sh 2>/dev/null &
+    spinner $! "Downloading Docker installer..."
+    sh /tmp/get-docker.sh > /tmp/docker-install.log 2>&1 &
+    spinner $! "Running Docker installer..."
+    systemctl start docker &>/dev/null
+    systemctl enable docker &>/dev/null
+    rm -f /tmp/get-docker.sh
+    log "Docker installed"
+fi
+
 if ! docker compose version &>/dev/null; then
-    warn "Installing docker-compose plugin..."
+    info "Installing Docker Compose plugin..."
     DOCKER_CONFIG=${DOCKER_CONFIG:-/usr/local/lib/docker/cli-plugins}
     mkdir -p "$DOCKER_CONFIG"
     COMPOSE_URL="https://github.com/docker/compose/releases/latest/download/docker-compose-linux-${ARCH}"
-    curl -SL "$COMPOSE_URL" -o "$DOCKER_CONFIG/docker-compose" 2>/dev/null || \
-    curl -SL "https://github.com/docker/compose/releases/download/v2.24.0/docker-compose-linux-${ARCH}" \
-        -o "$DOCKER_CONFIG/docker-compose"
+    curl -SL "$COMPOSE_URL" -o "$DOCKER_CONFIG/docker-compose" 2>/tmp/compose-dl.log &
+    spinner $! "Downloading Docker Compose..."
     chmod +x "$DOCKER_CONFIG/docker-compose"
     log "Docker Compose installed"
+else
+    log "Docker Compose: available"
 fi
 
-# ─── Step 3: Setup JMCL ──────────────────
-step "Step 3/5: Setting up JMCL Server Manager"
+draw_line 50 '─'
 
-# Create directories
+# ─── Step 3 ─────────────────────────────────
+((CURRENT_STEP++))
+echo ""
+progress_bar "$CURRENT_STEP" "$TOTAL_STEPS" "Setting up directories..."
+echo ""
+echo ""
+
 mkdir -p "$INSTALL_DIR" "$DATA_DIR/instances" "$DATA_DIR/servers"
 log "Created: $INSTALL_DIR"
 log "Created: $DATA_DIR"
 
-# Generate docker-compose.yml (uses GHCR pre-built images)
+# Generate docker-compose.yml
 if [ ! -f "$INSTALL_DIR/docker-compose.yml" ]; then
     cat > "$INSTALL_DIR/docker-compose.yml" << 'DOCKEREOF'
 version: '3.8'
@@ -106,11 +193,17 @@ networks:
   jmcl_net:
     driver: bridge
 DOCKEREOF
-    log "Generated docker-compose.yml"
 fi
+log "docker-compose.yml ready"
 
-# ─── Step 4: Configure Auto-start ─────────
-step "Step 4/5: Configuring Auto-start"
+draw_line 50 '─'
+
+# ─── Step 4 ─────────────────────────────────
+((CURRENT_STEP++))
+echo ""
+progress_bar "$CURRENT_STEP" "$TOTAL_STEPS" "Configuring auto-start..."
+echo ""
+echo ""
 
 cat > /etc/systemd/system/jmcl-server-manager.service << SERVICEEOF
 [Unit]
@@ -136,41 +229,64 @@ WantedBy=multi-user.target
 SERVICEEOF
 
 chmod 644 /etc/systemd/system/jmcl-server-manager.service
-systemctl daemon-reload
-systemctl enable jmcl-server-manager.service
-log "systemd service installed and enabled"
+systemctl daemon-reload &>/dev/null
+systemctl enable jmcl-server-manager.service &>/dev/null
+log "systemd service enabled (auto-start on boot)"
 
-# ─── Step 5: Build & Start ────────────────
-step "Step 5/5: Building and Starting Containers"
+draw_line 50 '─'
+
+# ─── Step 5 ─────────────────────────────────
+((CURRENT_STEP++))
+echo ""
+progress_bar "$CURRENT_STEP" "$TOTAL_STEPS" "Pulling images & starting..."
+echo ""
+echo ""
+
 cd "$INSTALL_DIR"
-docker compose pull 2>&1 || warn "Image pull may have issues"
-docker compose up -d 2>&1 || warn "Container start may have issues"
 
-# Wait for services
-sleep 5
+info "Pulling backend image..."
+docker compose pull backend-core > /tmp/jmcl-pull.log 2>&1 &
+spinner $! "Pulling backend-core..."
+log "Backend image pulled"
+
+info "Pulling frontend image..."
+docker compose pull frontend > /tmp/jmcl-pull2.log 2>&1 &
+spinner $! "Pulling frontend..."
+log "Frontend image pulled"
+
+info "Starting containers..."
+docker compose up -d > /tmp/jmcl-up.log 2>&1 &
+spinner $! "Launching JMCL services..."
+sleep 3
 
 # Verify
-if docker ps | grep -q jmcl-core; then
-    log "JMCL Core container is running"
-else
-    warn "Core container may not be running. Check: docker compose logs backend-core"
-fi
+BACKEND_OK=false
+FRONTEND_OK=false
+docker ps 2>/dev/null | grep -q jmcl-core && BACKEND_OK=true
+docker ps 2>/dev/null | grep -q jmcl-frontend && FRONTEND_OK=true
 
-if docker ps | grep -q jmcl-frontend; then
-    log "JMCL Frontend container is running"
+echo ""
+echo -e "  ${MG}┌─────────────────────────────────────┐${RC}"
+echo -e "  ${MG}│${RC}  Backend:  $($BACKEND_OK && echo "${GN}Running ✓${RC}" || echo "${RD}Failed ✗${RC}")  ${MG}                  │${RC}"
+echo -e "  ${MG}│${RC}  Frontend: $($FRONTEND_OK && echo "${GN}Running ✓${RC}" || echo "${RD}Failed ✗${RC}")  ${MG}                  │${RC}"
+echo -e "  ${MG}├─────────────────────────────────────┤${RC}"
+echo -e "  ${MG}│${RC}  UI:   ${CY}http://${SERVER_IP}:25540${RC}     ${MG}│${RC}"
+echo -e "  ${MG}│${RC}  API:  ${CY}http://${SERVER_IP}:25541${RC}     ${MG}│${RC}"
+echo -e "  ${MG}└─────────────────────────────────────┘${RC}"
+
+if $BACKEND_OK && $FRONTEND_OK; then
+    echo ""
+    echo -e "  ${GN}⭐ JMCL Server Manager ready!${RC}"
 else
-    warn "Frontend container may not be running. Check: docker compose logs frontend"
+    echo ""
+    warn "Some services may need attention. Check logs:"
+    echo "    docker compose -f $INSTALL_DIR/docker-compose.yml logs"
 fi
 
 echo ""
-echo "═══════════════════════════════════════"
-echo "  JMCL Server Manager Installed!"
-echo "───────────────────────────────────────"
-echo "  Frontend UI:  http://$(hostname -I 2>/dev/null | awk '{print $1}' || echo 'SERVER_IP'):25540"
-echo "  Backend API:  http://$(hostname -I 2>/dev/null | awk '{print $1}' || echo 'SERVER_IP'):25541"
-echo "───────────────────────────────────────"
-echo "  Manage:"
-echo "    systemctl start jmcl-server-manager"
-echo "    systemctl stop jmcl-server-manager"
+echo -e "  ${BL}Commands:${RC}"
+echo "    systemctl start/stop jmcl-server-manager"
 echo "    docker compose -f $INSTALL_DIR/docker-compose.yml logs -f"
-echo "═══════════════════════════════════════"
+echo ""
+draw_line 50 '─'
+echo ""
