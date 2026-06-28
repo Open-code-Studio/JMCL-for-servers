@@ -1,0 +1,42 @@
+version: '3.8'
+
+services:
+  backend-core:
+    build:
+      context: ./backend-core
+      dockerfile: Dockerfile
+    container_name: jmcl-core
+    ports:
+      - "27780:8080"
+    volumes:
+      - jmcl_data:/data
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - JMCL_DATA_DIR=/data
+      - JMCL_JAVA_HOME=/usr/lib/jvm/java-21-openjdk
+    restart: unless-stopped
+    networks:
+      - jmcl_net
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: jmcl-frontend
+    ports:
+      - "27781:80"
+    environment:
+      - API_BASE_URL=http://backend-core:8080
+    depends_on:
+      - backend-core
+    restart: unless-stopped
+    networks:
+      - jmcl_net
+
+volumes:
+  jmcl_data:
+    driver: local
+
+networks:
+  jmcl_net:
+    driver: bridge
