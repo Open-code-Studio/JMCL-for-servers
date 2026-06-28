@@ -64,24 +64,13 @@ mkdir -p "$INSTALL_DIR" "$DATA_DIR/instances" "$DATA_DIR/servers"
 log "Created: $INSTALL_DIR"
 log "Created: $DATA_DIR"
 
-# Copy project files from script location
-PROJECT_ROOT="$SCRIPT_DIR"
-if [ -f "$PROJECT_ROOT/docker-compose.yml" ]; then
-    cp "$PROJECT_ROOT/docker-compose.yml" "$INSTALL_DIR/"
-    [ -d "$PROJECT_ROOT/backend-core" ] && cp -r "$PROJECT_ROOT/backend-core" "$INSTALL_DIR/"
-    [ -d "$PROJECT_ROOT/frontend" ] && cp -r "$PROJECT_ROOT/frontend" "$INSTALL_DIR/"
-    log "Project files copied"
-fi
-
-# Generate docker-compose.yml if not copied
+# Generate docker-compose.yml (uses GHCR pre-built images)
 if [ ! -f "$INSTALL_DIR/docker-compose.yml" ]; then
     cat > "$INSTALL_DIR/docker-compose.yml" << 'DOCKEREOF'
 version: '3.8'
 services:
   backend-core:
-    build:
-      context: ./backend-core
-      dockerfile: Dockerfile
+    image: ghcr.io/open-code-studio/jmcl-backend:latest
     container_name: jmcl-core
     ports:
       - "252541:252541"
@@ -97,9 +86,7 @@ services:
       - jmcl_net
 
   frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
+    image: ghcr.io/open-code-studio/jmcl-frontend:latest
     container_name: jmcl-frontend
     ports:
       - "252540:252540"
@@ -156,7 +143,8 @@ log "systemd service installed and enabled"
 # ─── Step 5: Build & Start ────────────────
 step "Step 5/5: Building and Starting Containers"
 cd "$INSTALL_DIR"
-docker compose up -d --build 2>&1 || warn "Build may have encountered issues"
+docker compose pull 2>&1 || warn "Image pull may have issues"
+docker compose up -d 2>&1 || warn "Container start may have issues"
 
 # Wait for services
 sleep 5

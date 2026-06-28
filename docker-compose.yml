@@ -2,9 +2,7 @@ version: '3.8'
 
 services:
   backend-core:
-    build:
-      context: ./backend-core
-      dockerfile: Dockerfile
+    image: ghcr.io/open-code-studio/jmcl-backend:latest
     container_name: jmcl-core
     ports:
       - "252541:252541"
@@ -20,9 +18,7 @@ services:
       - jmcl_net
 
   frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
+    image: ghcr.io/open-code-studio/jmcl-frontend:latest
     container_name: jmcl-frontend
     ports:
       - "252540:252540"
