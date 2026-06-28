@@ -65,14 +65,11 @@ trap cursor_show EXIT
 
 # Mirror URLs
 if $USE_MIRROR; then
-    DOCKER_CE_URL="https://mirrors.aliyun.com/docker-ce/linux/static/stable/x86_64/"
-    COMPOSE_MIRROR="https://github.moeyy.xyz"
     DOCKER_REGISTRY_MIRRORS='
     "https://docker.1ms.run",
     "https://docker.xuanyuan.me"
 '
 else
-    COMPOSE_MIRROR="https://github.com"
     DOCKER_REGISTRY_MIRRORS=''
 fi
 
@@ -142,19 +139,29 @@ MIRROREOF
     fi
 fi
 
-# Docker Compose
-if ! docker compose version &>/dev/null; then
+# Docker Compose (Docker Engine v2+ already has it built-in)
+if docker compose version &>/dev/null; then
+    log "Docker Compose: $(docker compose version 2>&1)"
+elif command -v docker-compose &>/dev/null; then
+    log "Docker Compose: $(docker-compose --version 2>&1)"
+else
     info "Installing Docker Compose..."
     DCONF=${DOCKER_CONFIG:-/usr/local/lib/docker/cli-plugins}
     mkdir -p "$DCONF"
-    COMPOSE_VER="v2.24.0"
-    COMPOSE_URL="${COMPOSE_MIRROR}/docker/compose/releases/download/${COMPOSE_VER}/docker-compose-linux-${ARCH}"
-    curl -SL --connect-timeout 10 "$COMPOSE_URL" -o "$DCONF/docker-compose" 2>/dev/null &
-    spinner $! "Downloading..."
-    chmod +x "$DCONF/docker-compose"
-    log "Docker Compose: ${COMPOSE_VER}"
-else
-    log "Docker Compose: available"
+    # Try plugin install via apt first (fastest)
+    if command -v apt-get &>/dev/null; then
+        apt-get update -qq 2>/dev/null
+        apt-get install -y -qq docker-compose-plugin 2>/dev/null && \
+            log "Docker Compose installed via apt" && COMPOSE_INSTALLED=true
+    fi
+    # Fallback: download binary if apt didn't work
+    if [ "${COMPOSE_INSTALLED:-false}" != "true" ]; then
+        COMPOSE_URL="https://github.com/docker/compose/releases/download/v2.24.0/docker-compose-linux-${ARCH}"
+        curl -fSL --connect-timeout 30 --retry 3 "$COMPOSE_URL" -o "$DCONF/docker-compose" 2>/tmp/compose-dl.log &
+        spinner $! "Downloading Docker Compose..."
+        chmod +x "$DCONF/docker-compose"
+        log "Docker Compose installed"
+    fi
 fi
 
 # Add current user to docker group
