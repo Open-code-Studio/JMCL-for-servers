@@ -7,7 +7,7 @@ services:
       dockerfile: Dockerfile
     container_name: jmcl-core
     ports:
-      - "27780:8080"
+      - "252541:8080"
     volumes:
       - jmcl_data:/data
       - /var/run/docker.sock:/var/run/docker.sock
@@ -24,7 +24,7 @@ services:
       dockerfile: Dockerfile
     container_name: jmcl-frontend
     ports:
-      - "27781:80"
+      - "252540:80"
     environment:
       - API_BASE_URL=http://backend-core:8080
     depends_on:

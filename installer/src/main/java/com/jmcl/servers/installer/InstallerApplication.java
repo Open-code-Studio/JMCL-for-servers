@@ -86,15 +86,15 @@ public class InstallerApplication {
         if (startNow.isEmpty() || startNow.equals("y")) {
             startServices();
             System.out.println("\n✅ JMCL Server Manager is now running!");
-            String frontendUrl = "http://localhost:27781";
+            String frontendUrl = "http://localhost:252540";
             System.out.println("   Open your browser and visit: " + frontendUrl);
         }
 
         System.out.println("\n═══════════════════════════════════════");
         System.out.println("Installation Complete!");
         System.out.println("───────────────────────────────────────");
-        System.out.println("Frontend URL:  http://localhost:27781");
-        System.out.println("Backend API:   http://localhost:27780");
+        System.out.println("Frontend URL:  http://localhost:252540");
+        System.out.println("Backend API:   http://localhost:252541");
         System.out.println("Install Dir:   " + INSTALL_DIR);
         System.out.println("Data Dir:      " + DATA_DIR);
         System.out.println("───────────────────────────────────────");

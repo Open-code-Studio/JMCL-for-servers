@@ -207,7 +207,6 @@ const DownloadPage: React.FC = () => {
               />
 
               <Button
-                fullWidth
                 onClick={handleDownload}
                 disabled={downloading || !selectedType}
                 style={{ width: '100%', marginTop: 8 }}
