@@ -73,12 +73,12 @@ services:
     image: ghcr.io/open-code-studio/jmcl-backend:latest
     container_name: jmcl-core
     ports:
-      - "252541:252541"
+      - "25541:25541"
     volumes:
       - jmcl_data:/data
       - /var/run/docker.sock:/var/run/docker.sock
     environment:
-      - SERVER_PORT=252541
+      - SERVER_PORT=25541
       - JMCL_DATA_DIR=/data
       - JMCL_JAVA_HOME=/usr/lib/jvm/java-21-openjdk
     restart: unless-stopped
@@ -89,9 +89,9 @@ services:
     image: ghcr.io/open-code-studio/jmcl-frontend:latest
     container_name: jmcl-frontend
     ports:
-      - "252540:252540"
+      - "25540:25540"
     environment:
-      - API_BASE_URL=http://backend-core:252541
+      - API_BASE_URL=http://backend-core:25541
     depends_on:
       - backend-core
     restart: unless-stopped
@@ -166,8 +166,8 @@ echo ""
 echo "═══════════════════════════════════════"
 echo "  JMCL Server Manager Installed!"
 echo "───────────────────────────────────────"
-echo "  Frontend UI:  http://$(hostname -I 2>/dev/null | awk '{print $1}' || echo 'SERVER_IP'):252540"
-echo "  Backend API:  http://$(hostname -I 2>/dev/null | awk '{print $1}' || echo 'SERVER_IP'):252541"
+echo "  Frontend UI:  http://$(hostname -I 2>/dev/null | awk '{print $1}' || echo 'SERVER_IP'):25540"
+echo "  Backend API:  http://$(hostname -I 2>/dev/null | awk '{print $1}' || echo 'SERVER_IP'):25541"
 echo "───────────────────────────────────────"
 echo "  Manage:"
 echo "    systemctl start jmcl-server-manager"
