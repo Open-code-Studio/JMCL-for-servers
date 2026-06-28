@@ -174,11 +174,19 @@ mkdir -p "$INSTALL_DIR" "$DATA_DIR/instances" "$DATA_DIR/servers"
 log "Created: $INSTALL_DIR"
 log "Created: $DATA_DIR"
 
-cat > "$INSTALL_DIR/docker-compose.yml" << 'DOCKEREOF'
+if $USE_MIRROR; then
+    BACKEND_IMG="docker.io/open-code-studio/jmcl-backend:latest"
+    FRONTEND_IMG="docker.io/open-code-studio/jmcl-frontend:latest"
+else
+    BACKEND_IMG="ghcr.io/open-code-studio/jmcl-backend:latest"
+    FRONTEND_IMG="ghcr.io/open-code-studio/jmcl-frontend:latest"
+fi
+
+cat > "$INSTALL_DIR/docker-compose.yml" << DOCKEREOF
 version: '3.8'
 services:
   backend-core:
-    image: ghcr.io/open-code-studio/jmcl-backend:latest
+    image: ${BACKEND_IMG}
     container_name: jmcl-core
     ports:
       - "25541:25541"
@@ -194,7 +202,7 @@ services:
       - jmcl_net
 
   frontend:
-    image: ghcr.io/open-code-studio/jmcl-frontend:latest
+    image: ${FRONTEND_IMG}
     container_name: jmcl-frontend
     ports:
       - "25540:25540"
